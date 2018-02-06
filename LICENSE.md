@@ -1,4 +1,4 @@
-Macguffin is copyright (c) 2015 Evan Hildreth. Unless otherwise noted, all files in this repository are covered under the Apache License version 2 as found at <http://www.apache.org/licenses/LICENSE-2.0>. It is copied below for convenience.
+Audubon is copyright (c) 2018 Evan Hildreth. Unless otherwise noted, all files in this repository are covered under the Apache License version 2 as found at <http://www.apache.org/licenses/LICENSE-2.0>. It is copied below for convenience.
 
 Apache License
 ==============
