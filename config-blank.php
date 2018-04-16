@@ -12,4 +12,6 @@ $eph_config = array(
 	'mysql_database'  => '',
 	'mysql_user'			=> '',
 	'mysql_password'  => '',
+	
+	'hugo_base_dir'   => '/path/to/hugo/site/'
 );
