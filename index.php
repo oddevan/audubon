@@ -14,12 +14,45 @@
   	<div class="container">
 <?php
 
+require_once('config.php');
 require_once('vendor/autoload.php');
 
 use Embed\Embed;
-use League\CommonMark\CommonMarkConverter;
+$tumblr = new Tumblr\API\Client(
+    $eph_config['tumblr_key'],
+    $eph_config['tumblr_secret'],
+    $eph_config['tumblr_usr_key'],
+    $eph_config['tumblr_usr_sec']
+);
 
-$mkdwn = new CommonMarkConverter();
+// Make the request
+$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html'));
+
+$to_import = array();
+foreach ($response->posts as $post) {
+	$thisPost = array(
+		'pubdate' => $post->date,
+		'tmbid' => $post->id,
+		'tags' => $post->tags,
+	);
+	
+	if (!empty($post->reblogged_from_url)) {
+		$rebagel = $post->reblogged_from_url;
+		
+		try {
+			$thisPost['body'] = Embed::create($rebagel)->code;
+		} catch (\Exception $error) {
+			$thisPost['body'] = '<p><a href="'.$rebagel.'">'.$rebagel.'</a></p>';
+		}
+		
+		$thisPost['body'] .= "\n\n".$post->reblog->comment;
+	} else {
+		$thisPost['body'] = $post->reblog->comment;
+	}
+	
+	$to_import[] = $thisPost;
+}
+
 //$info = Embed::create('https://twitter.com/statuses/937871668554358784');
 //echo $info->code;
 
@@ -35,31 +68,13 @@ foreach ($to_import as $post) :
 
 <div class="row justify-content-md-center">
 	<div class="col-md-6">
-		<?php if ($post['type'] == 'embed') : ?>
-			<?php echo Embed::create($post['embed_url'])->code; ?>
-		<?php elseif ($post['type'] == 'picture') : ?>
-			<?php foreach ($post['images'] as $image) : ?>
-			<img src="<?php echo $image; ?>" alt="image" class="img-fluid">
-			<?php endforeach; ?>
-		<?php elseif ($post['type'] == 'video') : ?>
-			<?php foreach ($post['videos'] as $video) : ?>
-			<video src="<?php echo $video['url']; ?>" class="img-fluid"<?php if ($video['gif']) echo ' autoplay loop'; ?>></video>
-			<?php endforeach; ?>
-		<?php endif; ?>
-		<div>
-			<?php echo $mkdwn->convertToHtml($post['body']); ?>
-			<?php if ($post['type'] != 'picture') : foreach ($post['images'] as $image) : ?>
-			<img src="<?php echo $image; ?>" alt="image" class="img-fluid">
-			<?php endforeach; endif; ?>
-			<?php if ($post['type'] != 'video') : foreach ($post['videos'] as $video) : ?>
-			<video src="<?php echo $video['url']; ?>" class="img-fluid"<?php if ($video['gif']) echo ' autoplay loop'; ?>></video>
-			<?php endforeach; endif; ?>
-			<p>
-			<?php foreach ($post['tags'] as $tag) : ?>
-				<a href="#" class="badge badge-secondary">#<?php echo $tag; ?></a>
-			<?php endforeach; ?>
-			</p>
-		</div>
+		<?php echo $post['body']; ?>
+		
+		<p>
+		<?php foreach ($post['tags'] as $tag) : ?>
+			<a href="#" class="badge badge-secondary">#<?php echo $tag; ?></a>
+		<?php endforeach; ?>
+		</p>
 	</div>
 </div>
 <hr>
