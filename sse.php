@@ -14,7 +14,7 @@ $settings = array(
 );
 
 $url = 'https://api.twitter.com/1.1/statuses/user_timeline.json';
-$getfield = '?count=100&trim_user=true&exclude_replies=false&include_rts=true&tweet_mode=extended';
+$getfield = '?count=20&trim_user=true&exclude_replies=false&include_rts=true&tweet_mode=extended';
 $requestMethod = 'GET';
 
 $twitter = new TwitterAPIExchange($settings);
@@ -37,6 +37,9 @@ exec("git pull origin");
 echo 'Processing...';
 
 foreach ($twitter_response as $tweet) {
+	$thisPost['tags'] = array();
+	$thisPost['categories'] = array();
+	
 	$thisPost = array(
 		'twdate' => $tweet->created_at,
 		'pubdate' => date_create_from_format('D M d H:i:s O Y', $tweet->created_at)->setTimezone(new DateTimeZone('America/New_York')),
@@ -52,6 +55,8 @@ foreach ($twitter_response as $tweet) {
 		  $thisPost['body'] = getTweetEmbed($tweet->in_reply_to_status_id)."\n\n".$thisPost['body'];
 		} elseif ($tweet->is_quote_status) {
 			$thisPost['body'] = getTweetEmbed($tweet->quoted_status_id)."\n\n".$thisPost['body'];
+		} else {
+			$thisPost['categories'][] = 'micropost';
 		}
 	
 		foreach ($tweet->entities->urls as $tacolink) {
@@ -82,7 +87,6 @@ foreach ($twitter_response as $tweet) {
 			}
 		}
 		
-		$thisPost['tags'] = array();
 		if (!empty($tweet->entities->hashtags)) {
 			foreach ($tweet->entities->hashtags as $hashtag) {
 				$thisPost['body'] = str_replace(
@@ -100,8 +104,8 @@ foreach ($twitter_response as $tweet) {
 					if (!array_key_exists('media', $thisPost)) $thisPost['media'] = array();
 					$thisPost['media'][] = array('url' => $media->media_url_https, 'type' => 'img');
 					
-					file_put_contents($eph_config['hugo_base_dir'].'static/static/'.substr(strrchr($media->media_url_https, "/"), 1), file_get_contents($media->media_url_https));
-					$thisPost['body'] .= "\n\n![Image from twitter](/static/".substr(strrchr($media->media_url_https, "/"), 1).")";
+					file_put_contents($eph_config['hugo_base_dir'].'images/'.substr(strrchr($media->media_url_https, "/"), 1), file_get_contents($media->media_url_https));
+					$thisPost['body'] .= "\n\n![Image from twitter]({{ \"/\" | relative_url  }}images/".substr(strrchr($media->media_url_https, "/"), 1).")";
 				} elseif ($media->type == 'video' || $media->type == 'animated_gif') {
 					if (!array_key_exists('media', $thisPost)) $thisPost['media'] = array();
 					
@@ -115,8 +119,8 @@ foreach ($twitter_response as $tweet) {
 					}
 					$thisPost['media'][] = array('url' => $videoURL, 'type' => 'video', 'gif' => ($media->type == 'animated_gif'));
 					
-					file_put_contents($eph_config['hugo_base_dir'].'static/static/'.substr(strrchr($videoURL, "/"), 1), file_get_contents($videoURL));
-					$thisPost['body'] .= "\n\n".'<video src="static/'.substr(strrchr($videoURL, "/"), 1).'"';
+					file_put_contents($eph_config['hugo_base_dir'].'images/'.substr(strrchr($videoURL, "/"), 1), file_get_contents($videoURL));
+					$thisPost['body'] .= "\n\n".'<video src="{{ "/" | relative_url  }}images/'.substr(strrchr($videoURL, "/"), 1).'"';
 					if ($media->type == 'animated_gif') $thisPost['body'] .= ' autoplay loop';
 					$thisPost['body'] .= '></video>';
 				}
@@ -142,13 +146,19 @@ foreach ($to_import as $post) {
 	  	$output .= "  - ".$tag."\n";
 	  }
 	}
+	if (!empty($post['categories'])) {
+	  $output .= "categories:\n";
+	  foreach ($post['categories'] as $cat) {
+	  	$output .= "  - ".$cat."\n";
+	  }
+	}
 	if ($post['threadto']) $output .= 'thread_to: '.$post['threadto']."\n";
 	$output .= "title: ''\n";
 	$output .= "---\n\n";
 	$output .= $post['body'];
 	$output .= "\n";
 	
-	$fileout = fopen($eph_config['hugo_base_dir'].'content/posts/'.$post['pubdate']->format('Y-m-d').'-'.$post['twid'].'.md', 'w');
+	$fileout = fopen($eph_config['hugo_base_dir'].'_posts/'.$post['pubdate']->format('Y-m-d').'-'.$post['twid'].'.md', 'w');
 	fwrite($fileout, $output);
 	fclose($fileout);
 }
