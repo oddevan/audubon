@@ -39,6 +39,7 @@ echo 'Processing...';
 foreach ($twitter_response as $tweet) {
 	$thisPost['tags'] = array();
 	$thisPost['categories'] = array();
+	$thisPost['threadto'] = '';
 	
 	$thisPost = array(
 		'twdate' => $tweet->created_at,
