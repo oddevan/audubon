@@ -39,7 +39,6 @@ echo 'Processing...';
 foreach ($twitter_response as $tweet) {
 	$thisPost['tags'] = array();
 	$thisPost['categories'] = array();
-	$thisPost['threadto'] = '';
 	
 	$thisPost = array(
 		'twdate' => $tweet->created_at,
@@ -153,7 +152,7 @@ foreach ($to_import as $post) {
 	  	$output .= "  - ".$cat."\n";
 	  }
 	}
-	if ($post['threadto']) $output .= 'thread_to: '.$post['threadto']."\n";
+	if (array_key_exists('threadto', $post)) $output .= 'thread_to: '.$post['threadto']."\n";
 	$output .= "title: ''\n";
 	$output .= "---\n\n";
 	$output .= $post['body'];
