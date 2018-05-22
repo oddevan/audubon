@@ -138,30 +138,34 @@ foreach ($twitter_response as $tweet) {
 }
 
 foreach ($to_import as $post) {
-	$output  = "---\n";
-	$output .= "date: ".$post['pubdate']->format('Y-m-d H:i:s')."\n";
-	$output .= "twitter_id: ".$post['twid']."\n";
-	if (!empty($post['tags'])) {
-	  $output .= "tags:\n";
-	  foreach ($post['tags'] as $tag) {
-	  	$output .= "  - ".$tag."\n";
-	  }
-	}
-	if (!empty($post['categories'])) {
-	  $output .= "categories:\n";
-	  foreach ($post['categories'] as $cat) {
-	  	$output .= "  - ".$cat."\n";
-	  }
-	}
-	if ($post['threadto']) $output .= 'thread_to: '.$post['threadto']."\n";
-	$output .= "title: ''\n";
-	$output .= "---\n\n";
-	$output .= $post['body'];
-	$output .= "\n";
+	$file_full_path = $eph_config['hugo_base_dir'].'_posts/'.$post['pubdate']->format('Y-m-d').'-'.$post['twid'].'.md';
+
+	if (!file_exists($file_full_path)) {
+		$output  = "---\n";
+		$output .= "date: ".$post['pubdate']->format('Y-m-d H:i:s')."\n";
+		$output .= "twitter_id: ".$post['twid']."\n";
+		if (!empty($post['tags'])) {
+			$output .= "tags:\n";
+			foreach ($post['tags'] as $tag) {
+				$output .= "  - ".$tag."\n";
+			}
+		}
+		if (!empty($post['categories'])) {
+			$output .= "categories:\n";
+			foreach ($post['categories'] as $cat) {
+				$output .= "  - ".$cat."\n";
+			}
+		}
+		if ($post['threadto']) $output .= 'thread_to: '.$post['threadto']."\n";
+		$output .= "title: ''\n";
+		$output .= "---\n\n";
+		$output .= $post['body'];
+		$output .= "\n";
 	
-	$fileout = fopen($eph_config['hugo_base_dir'].'_posts/'.$post['pubdate']->format('Y-m-d').'-'.$post['twid'].'.md', 'w');
-	fwrite($fileout, $output);
-	fclose($fileout);
+		$fileout = fopen($file_full_path, 'w');
+		fwrite($fileout, $output);
+		fclose($fileout);
+	}
 }
 
 exec("git add .");  
