@@ -43,128 +43,137 @@ while (!empty($twitter_response)) {
 
 	$to_import = array();
 
-	echo 'Processing...';
+	echo 'Processing...'."\n";
 
-	foreach ($twitter_response as $tweet) {
-		$thisPost = array(
-			'pubdate' => date_create_from_format('D M d H:i:s O Y', $tweet->created_at)->setTimezone(new DateTimeZone('America/New_York')),
-			'body' => mb_substr($tweet->full_text, $tweet->display_text_range[0], ($tweet->display_text_range[1] - $tweet->display_text_range[0])),
-			'twid' => $tweet->id,
-		);
-
-		if (!empty($tweet->retweeted_status)) {
-			unset($thisPost['body']);
-			$thisPost['body'] = getTweetEmbed($tweet->retweeted_status->id);
-		} else {
-			$thisPost['tags'] = array();
+foreach ($twitter_response as $tweet) {
+	echo 'Importing '.$tweet->created_at."\n";
+	
+  $tweetDate = date_create_from_format('D M d H:i:s O Y', $tweet->created_at);
+  if ($tweetDate) {
+		$postdir = $eph_config['hugo_base_dir'].'content/status/'.$tweetDate->format('Y/m').'/'.$tweet->id;
+	
+		if (!is_dir($postdir)) {
+			//Make the status, year, and month directories if needed
+			if (!is_dir($eph_config['hugo_base_dir'].'content/status'))
+				mkdir($eph_config['hugo_base_dir'].'content/status');
+			if (!is_dir($eph_config['hugo_base_dir'].'content/status/'.$tweetDate->format('Y')))
+				mkdir($eph_config['hugo_base_dir'].'content/status/'.$tweetDate->format('Y'));
+			if (!is_dir($eph_config['hugo_base_dir'].'content/status/'.$tweetDate->format('Y/m')))
+				mkdir($eph_config['hugo_base_dir'].'content/status/'.$tweetDate->format('Y/m'));
 		
-			if ($tweet->in_reply_to_status_id && $tweet->in_reply_to_user_id != $tweet->user->id) {
-				$thisPost['body'] = getTweetEmbed($tweet->in_reply_to_status_id)."\n\n".$thisPost['body'];
-			} elseif ($tweet->is_quote_status) {
-				$thisPost['body'] = getTweetEmbed($tweet->quoted_status_id)."\n\n".$thisPost['body'];
+			//Make the leaf bundle for this post
+			mkdir($postdir);
+		
+			$frontmatter = array(
+				'date' => $tweet->created_at,
+				'slug' => $tweet->id,
+				'twitter_id' => $tweet->id,
+				'tags' => array(),
+				'categories' => array(),
+				'resources' => array()
+			);
+			$body = mb_substr($tweet->full_text, $tweet->display_text_range[0], ($tweet->display_text_range[1] - $tweet->display_text_range[0]));
+
+			if (!empty($tweet->retweeted_status)) {
+				unset($body);
+				$body = getTweetEmbed($tweet->retweeted_status->id);
 			} else {
-				$thisPost['tags'][] = 'micropost';
-			}
+				if ($tweet->in_reply_to_status_id && $tweet->in_reply_to_user_id != $tweet->user->id) {
+					$body = getTweetEmbed($tweet->in_reply_to_status_id)."\n\n".$body;
+				} elseif ($tweet->is_quote_status) {
+					$body = getTweetEmbed($tweet->quoted_status_id)."\n\n".$body;
+				} else {
+					$frontmatter['categories'][] = 'micropost';
+				}
 	
-			foreach ($tweet->entities->urls as $tacolink) {
-				if ($tweet->is_quote_status) {
-					$ind = strrpos($tacolink->expanded_url, '/');
-					if (substr($tacolink->expanded_url, $ind + 1) == $tweet->quoted_status_id) {
-						$thisPost['body'] = str_replace($tacolink->url,	'',	$thisPost['body']);
-					}
-				}
-		
-				$thisPost['body'] = str_replace(
-					$tacolink->url,
-					'['.$tacolink->display_url.']('.$tacolink->expanded_url.')',
-					$thisPost['body']
-				);
-			}
-		
-			$alreadyMentioned = array();
-			foreach ($tweet->entities->user_mentions as $atmention) {
-				//if ($atmention->indicies[0] >= $tweet->display_text_range[0]) {
-				if (!in_array($atmention->screen_name, $alreadyMentioned)) {
-					$thisPost['body'] = str_replace(
-						'@'.$atmention->screen_name,
-						'[@'.$atmention->screen_name.'](https://twitter.com/'.$atmention->screen_name.')',
-						$thisPost['body']
-					);
-					$alreadyMentioned[] = $atmention->screen_name;
-				}
-			}
-		
-			if (!empty($tweet->entities->hashtags)) {
-				foreach ($tweet->entities->hashtags as $hashtag) {
-					$thisPost['body'] = str_replace(
-						'#'.$hashtag->text,
-						'[#'.$hashtag->text.'](https://twitter.com/hashtag/'.$hashtag->text.')',
-						$thisPost['body']
-					);
-					$thisPost['tags'][] = $hashtag->text;
-				}
-			}
-		
-			if (!empty($tweet->extended_entities->media)) {
-				foreach ($tweet->extended_entities->media as $media) {
-					if ($media->type == 'photo') {
-						if (!array_key_exists('media', $thisPost)) $thisPost['media'] = array();
-						$thisPost['media'][] = array('url' => $media->media_url_https, 'type' => 'img');
-					
-						file_put_contents($eph_config['hugo_base_dir'].'images/'.substr(strrchr($media->media_url_https, "/"), 1), file_get_contents($media->media_url_https));
-						$thisPost['body'] .= "\n\n![Image from twitter]({{ \"/\" | relative_url  }}images/".substr(strrchr($media->media_url_https, "/"), 1).")";
-					} elseif ($media->type == 'video' || $media->type == 'animated_gif') {
-						if (!array_key_exists('media', $thisPost)) $thisPost['media'] = array();
-					
-						$videoURL = '#';
-						$videoBitrate = -1;
-						foreach ($media->video_info->variants as $vidinfo) {
-							if ($vidinfo->content_type == 'video/mp4' && $vidinfo->bitrate > $videoBitrate) {
-								$videoBitrate = $vidinfo->bitrate;
-								$videoURL = $vidinfo->url;
-							}
+				foreach ($tweet->entities->urls as $tacolink) {
+					if ($tweet->is_quote_status) {
+						$ind = strrpos($tacolink->expanded_url, '/');
+						if (substr($tacolink->expanded_url, $ind + 1) == $tweet->quoted_status_id) {
+							$body = str_replace($tacolink->url,	'',	$body);
 						}
-						$thisPost['media'][] = array('url' => $videoURL, 'type' => 'video', 'gif' => ($media->type == 'animated_gif'));
-					
-						file_put_contents($eph_config['hugo_base_dir'].'images/'.substr(strrchr($videoURL, "/"), 1), file_get_contents($videoURL));
-						$thisPost['body'] .= "\n\n".'<video src="{{ \"/\" | relative_url  }}images/'.substr(strrchr($videoURL, "/"), 1).'"';
-						if ($media->type == 'animated_gif') $thisPost['body'] .= ' autoplay loop';
-						$thisPost['body'] .= '></video>';
+					}
+		
+					$body = str_replace(
+						$tacolink->url,
+						'['.$tacolink->display_url.']('.$tacolink->expanded_url.')',
+						$body
+					);
+				}
+		
+				$alreadyMentioned = array();
+				foreach ($tweet->entities->user_mentions as $atmention) {
+					if (!in_array($atmention->screen_name, $alreadyMentioned)) {
+						$body = str_replace(
+							'@'.$atmention->screen_name,
+							'[@'.$atmention->screen_name.'](https://twitter.com/'.$atmention->screen_name.')',
+							$body
+						);
+						$alreadyMentioned[] = $atmention->screen_name;
+					}
+				}
+		
+				if (!empty($tweet->entities->hashtags)) {
+					foreach ($tweet->entities->hashtags as $hashtag) {
+						$body = str_replace(
+							'#'.$hashtag->text,
+							'[#'.$hashtag->text.'](https://twitter.com/hashtag/'.$hashtag->text.')',
+							$body
+						);
+						$frontmatter['tags'][] = $hashtag->text;
+					}
+				}
+		
+				if (!empty($tweet->extended_entities->media)) {
+					foreach ($tweet->extended_entities->media as $media) {
+						if ($media->type == 'photo') {
+							$filename = substr(strrchr($media->media_url_https, "/"), 1);
+							file_put_contents($postdir.'/'.$filename, file_get_contents($media->media_url_https));
+							$frontmatter['resources'][] = array('src' => $filename, 'name' => $media->id.'');
+						
+							$body .= "\n\n".'{{< eph_resource "'.$media->id.'" >}}';
+						} elseif ($media->type == 'video' || $media->type == 'animated_gif') {
+							$videoURL = '#';
+							$videoBitrate = -1;
+							foreach ($media->video_info->variants as $vidinfo) {
+								if ($vidinfo->content_type == 'video/mp4' && $vidinfo->bitrate > $videoBitrate) {
+									$videoBitrate = $vidinfo->bitrate;
+									$videoURL = $vidinfo->url;
+								}
+							}
+						
+							$filename = substr(strrchr($videoURL, "/"), 1);
+							file_put_contents($postdir.'/'.$filename, file_get_contents($videoURL));
+							$frontmatter['resources'][] = array(
+								'src' => $filename,
+								'name' => $media->id.'',
+								'params' => array('gif' => ($media->type == 'animated_gif'))
+							);
+						
+							$body .= "\n\n".'{{< eph_resource "'.$media->id.'" >}}';
+						}
 					}
 				}
 			}
-		}
 	
-		if ($tweet->in_reply_to_user_id == $tweet->user->id) {
-			$thisPost['threadto'] = $tweet->in_reply_to_status_id;
-			//$to_thread[] = $thisPost;
-		} //else {
-			$to_import[] = $thisPost;
-		//}
+		/*
+			if ($tweet->in_reply_to_user_id == $tweet->user->id) {
+				$thisPost['threadto'] = $tweet->in_reply_to_status_id;
+				//$to_thread[] = $thisPost;
+			} //else {
+				$to_import[] = $thisPost;
+			//}
+		*/
+	
+			$fileout = fopen($postdir.'/index.md', 'w');
+			fwrite($fileout, json_encode($frontmatter)."\n\n".$body);
+			fclose($fileout);
+			
+		}
 		
 		if ($max_twid > $tweet->id || $max_twid == -1) $max_twid = $tweet->id;
 	}
-
-	foreach ($to_import as $post) {
-		$output  = "---\n";
-		$output .= "date: ".$post['pubdate']->format('Y-m-d H:i:s')."\n";
-		$output .= "twitter_id: ".$post['twid']."\n";
-		if (!empty($post['tags'])) {
-			$output .= "tags:\n";
-			foreach ($post['tags'] as $tag) {
-				$output .= "  - ".$tag."\n";
-			}
-		}
-		if ($post['threadto']) $output .= 'thread_to: '.$post['threadto']."\n";
-		$output .= "title: ''\n";
-		$output .= "---\n\n";
-		$output .= $post['body'];
-		$output .= "\n";
-	
-		$fileout = fopen($eph_config['hugo_base_dir'].'_posts/'.$post['pubdate']->format('Y-m-d').'-'.$post['twid'].'.md', 'w');
-		fwrite($fileout, $output);
-		fclose($fileout);
-	}
+}
 
 	$max_twid -= 1;
 	$twitter_response = json_decode($twitter->setGetfield($getfield.'&max_id='.$max_twid)->buildOauth($url, $requestMethod)->performRequest());
