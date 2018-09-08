@@ -33,7 +33,7 @@ function getTweetEmbed($twid) {
 }
 
 chdir($eph_config['hugo_base_dir']);
-#exec("git pull origin");
+exec("git pull origin");
 
 echo 'Processing...';
 
@@ -186,9 +186,9 @@ foreach ($to_import as $post) {
 	fwrite($fileout, $output);
 	fclose($fileout);
 }
-
+*/
 exec("git add .");  
 exec("git commit -m 'Update from Audubon'");
 exec("git push origin master");
-*/
+
 echo 'done!';
