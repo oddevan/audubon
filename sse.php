@@ -32,7 +32,7 @@ function getTweetEmbed($twid) {
 	}
 }
 
-chdir($eph_config['hugo_base_dir']);
+chdir($eph_config['jekyll_base_dir']);
 exec("git pull origin");
 
 echo 'Processing...';
@@ -45,7 +45,7 @@ foreach ($twitter_response as $tweet) {
 		'twid' => $tweet->id,
 	);
 	
-	if (!file_exists($eph_config['hugo_base_dir'].'_posts/'.$thisPost['pubdate']->format('Y-m-d').'-'.$thisPost['twid'].'.md')) {	
+	if (!file_exists($eph_config['jekyll_base_dir'].'_posts/'.$thisPost['pubdate']->format('Y-m-d').'-'.$thisPost['twid'].'.md')) {	
 		$thisPost['tags'] = array();
 		$thisPost['categories'] = array();
 
@@ -106,7 +106,7 @@ foreach ($twitter_response as $tweet) {
 						if (!array_key_exists('media', $thisPost)) $thisPost['media'] = array();
 						$thisPost['media'][] = array('url' => $media->media_url_https, 'type' => 'img');
 					
-						file_put_contents($eph_config['hugo_base_dir'].'images/'.substr(strrchr($media->media_url_https, "/"), 1), file_get_contents($media->media_url_https));
+						file_put_contents($eph_config['jekyll_base_dir'].'images/'.substr(strrchr($media->media_url_https, "/"), 1), file_get_contents($media->media_url_https));
 						$thisPost['body'] .= "\n\n![Image from twitter]({{ \"/\" | relative_url  }}images/".substr(strrchr($media->media_url_https, "/"), 1).")";
 					} elseif ($media->type == 'video' || $media->type == 'animated_gif') {
 						if (!array_key_exists('media', $thisPost)) $thisPost['media'] = array();
@@ -121,7 +121,7 @@ foreach ($twitter_response as $tweet) {
 						}
 						$thisPost['media'][] = array('url' => $videoURL, 'type' => 'video', 'gif' => ($media->type == 'animated_gif'));
 					
-						file_put_contents($eph_config['hugo_base_dir'].'images/'.substr(strrchr($videoURL, "/"), 1), file_get_contents($videoURL));
+						file_put_contents($eph_config['jekyll_base_dir'].'images/'.substr(strrchr($videoURL, "/"), 1), file_get_contents($videoURL));
 						$thisPost['body'] .= "\n\n".'<video src="{{ "/" | relative_url  }}images/'.substr(strrchr($videoURL, "/"), 1).'"';
 						if ($media->type == 'animated_gif') $thisPost['body'] .= ' autoplay loop';
 						$thisPost['body'] .= '></video>';
@@ -160,7 +160,7 @@ foreach ($to_import as $post) {
 	$output .= "---\n\n";
 	$output .= $post['body'];
 	$output .= "\n";
-	$fileout = fopen($eph_config['hugo_base_dir'].'_posts/'.$post['pubdate']->format('Y-m-d').'-'.$post['twid'].'.md', 'w');
+	$fileout = fopen($eph_config['jekyll_base_dir'].'_posts/'.$post['pubdate']->format('Y-m-d').'-'.$post['twid'].'.md', 'w');
 	fwrite($fileout, $output);
 	fclose($fileout);
 }
