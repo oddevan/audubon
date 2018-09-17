@@ -6,7 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
     <!-- Bootstrap CSS -->
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta.3/css/bootstrap.min.css" integrity="sha384-Zug+QiDoJOrZ5t4lssLdxGhVrurbmBWopoEl+M6BdEfwnCJZtKxi1KgxUyJq13dy" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+    <style>
+			blockquote {
+				border-left: 5px solid grey;
+				padding-left: 2em;
+			}
+		</style>
 
     <title>Hello, world!</title>
   </head>
@@ -26,7 +32,8 @@ $tumblr = new Tumblr\API\Client(
 );
 
 // Make the request
-$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html'));
+$response = $tumblr->getBlogPosts('oddevan.tumblr.com', array('reblog_info' => true, 'filter' => 'html'));
+//$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 20));
 
 $to_import = array();
 foreach ($response->posts as $post) {
@@ -34,20 +41,42 @@ foreach ($response->posts as $post) {
 		'pubdate' => $post->date,
 		'tmbid' => $post->id,
 		'tags' => $post->tags,
+		'obj' => $post,
+		'source_url' => $post->source_url,
+		'source_title' => $post->source_title,
 	);
 	
+	//This is a reblog, so embed the reblogged post and add the comment
 	if (!empty($post->reblogged_from_url)) {
 		$rebagel = $post->reblogged_from_url;
+		$embedcode = '';
 		
 		try {
-			$thisPost['body'] = Embed::create($rebagel)->code;
+			$embedcode = Embed::create($rebagel)->code;
+			if (empty($embedcode)) {
+				$embedcode = json_decode(file_get_contents('https://www.tumblr.com/oembed/1.0?url='.$rebagel))->html;
+			}
+			$thisPost['body'] = $embedcode;
 		} catch (\Exception $error) {
 			$thisPost['body'] = '<p><a href="'.$rebagel.'">'.$rebagel.'</a></p>';
 		}
 		
 		$thisPost['body'] .= "\n\n".$post->reblog->comment;
 	} else {
-		$thisPost['body'] = $post->reblog->comment;
+		//This is an original post, so let's figure out the format!
+		switch($post->type) {
+			case 'link':
+				$thisPost['body'] = '<h2>🔗 <a href="'.$post->url.'">'.$post->title.'</a></h2>';
+				$thisPost['body'] .= "\n\n".$post->description;
+				break;
+			case: 'video':
+				if ($post->video_type == 'unknown') {
+					
+				}
+				$thisPost['body'] .= "\n\n".$post->caption;
+		}
+		
+		//$thisPost['body'] = $post->reblog->comment;
 	}
 	
 	$to_import[] = $thisPost;
@@ -57,9 +86,9 @@ foreach ($response->posts as $post) {
 //echo $info->code;
 
 /*
-echo '<pre>';
-print_r($to_import);
-echo '</pre>';
+echo '<!--';
+print_r($response);
+echo '-->';
 */
 
 foreach ($to_import as $post) :
@@ -77,6 +106,10 @@ foreach ($to_import as $post) :
 		</p>
 	</div>
 </div>
+
+<!--
+<?php print_r($post['obj']); ?>
+-->
 <hr>
 
 <?php endforeach; ?>
@@ -84,8 +117,8 @@ foreach ($to_import as $post) :
 		</div>
     <!-- Optional JavaScript -->
     <!-- jQuery first, then Popper.js, then Bootstrap JS -->
-    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta.3/js/bootstrap.min.js" integrity="sha384-a5N7Y/aK3qNeh15eJKGWxsqtnX/wWdSZSKp+81YjTmS15nvnvxKHuzaWwXHDli+4" crossorigin="anonymous"></script>
-  </body>
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
+		<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
+	</body>
 </html>
