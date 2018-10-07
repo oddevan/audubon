@@ -32,8 +32,8 @@ $tumblr = new Tumblr\API\Client(
 );
 
 // Make the request
-$response = $tumblr->getBlogPosts('oddevan.tumblr.com', array('reblog_info' => true, 'filter' => 'html'));
-//$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 20));
+$response = $tumblr->getBlogPosts('nerdflavor.tumblr.com', array('reblog_info' => true, 'filter' => 'html'));
+//$response = $tumblr->getBlogPosts('isthatwhy-everything-is-on-fire.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 0));
 
 $to_import = array();
 foreach ($response->posts as $post) {
@@ -64,16 +64,68 @@ foreach ($response->posts as $post) {
 		$thisPost['body'] .= "\n\n".$post->reblog->comment;
 	} else {
 		//This is an original post, so let's figure out the format!
+		if ($post->title) $thisPost['title'] = $post->title;
 		switch($post->type) {
+		  case 'text':
+		  	$thisPost['body'] .= $post->body;
+		  	break;
 			case 'link':
-				$thisPost['body'] = '<h2>🔗 <a href="'.$post->url.'">'.$post->title.'</a></h2>';
+				$thisPost['body'] = '<h3>🔗 <a href="'.$post->url.'">'.$post->title.'</a></h3>';
 				$thisPost['body'] .= "\n\n".$post->description;
 				break;
-			case: 'video':
-				if ($post->video_type == 'unknown') {
-					
+			case 'video':
+				if ($post->video_type == 'youtube') {
+					$thisPost['body'] = Embed::create('https://youtu.be/'.$post->video->youtube->video_id)->code;
+				} elseif ($post->video_type == 'tumblr') {
+					$thisPost['body'] = '<video style="width:100%;height:auto;" controls poster="'.$post->thumbnail_url.'" src="'.$post->video_url.'"></video>';
+					// video embed code from $post->video_url
+				} else {
+					$thisPost['body'] = "";
 				}
 				$thisPost['body'] .= "\n\n".$post->caption;
+				break;
+			case 'photo':
+				if (count($post->photos) > 1) {
+					//look at digits of $post->photoset_layout str_split($post->photoset_layout)
+					//each digit is the number of photos in a row
+					$photoInd = 0;
+					$thisPost['body'] = "";
+					foreach (str_split($post->photoset_layout) as $rowSize) {
+						$numLeftInRow = $rowSize;
+						$thisPost['body'] .= '<div class="row">'."\n";
+						while ($numLeftInRow > 0) {
+							$currentPhoto = $post->photos[$photoInd];
+							$thisPost['body'] .= '<div class="col-sm">'."\n".
+																	 '  <img class="img-fluid" alt="'.$currentPhoto->caption.'" src="'.$currentPhoto->original_size->url.'">'."\n".
+																	 '</div>'."\n";
+							$photoInd += 1;
+							$numLeftInRow -= 1;
+						}
+						$thisPost['body'] .= '</div>'."\n";
+					}
+				} else {
+					$thisPost['body'] = '<p>';
+					if ($post->link_url) $thisPost['body'] .= '<a href="'.$post->link_url.'">';
+					$thisPost['body'] .= '<img class="img-fluid" alt="Image from tumblr" src="'.$post->photos[0]->original_size->url.'">';
+					if ($post->link_url) $thisPost['body'] .= '</a>';
+					$thisPost['body'] .= '</p>';
+				}
+				$thisPost['body'] .= "\n\n".$post->caption;
+				break;
+			case 'chat':
+				$thisPost['body'] = '<dl class="row">'."\n";
+				foreach ($post->dialogue as $dline) {
+					$thisPost['body'] .= '  <dt class="col-sm-3">'.$dline->label.'</dt>'."\n".
+															 '  <dd class="col-sm-9">'.$dline->phrase.'</dd>'."\n";
+				}
+				$thisPost['body'] .= '</dl>';
+				break;
+			case 'quote':
+				$thisPost['body'] = '<blockquote class="blockquote">'."\n".
+														'  <p>'.$post->text.'</p>'."\n".
+														'  <footer class="blockquote-footer">'.$post->source.'</footer>'."\n".
+														'</blockquote>';
+				break;														
 		}
 		
 		//$thisPost['body'] = $post->reblog->comment;
@@ -97,7 +149,15 @@ foreach ($to_import as $post) :
 
 <div class="row justify-content-md-center">
 	<div class="col-md-6">
+		<?php if ($post['title']) echo '<h2>'.$post['title'].'</h2>'; ?>
+		
 		<?php echo $post['body']; ?>
+		
+		<?php if ($post['source_url']) : ?>
+		<p><a class="badge badge-primary" href="<?php echo $post['source_url']; ?>">
+			<?php echo $post['source_title'] ? 'Source: '.$post['source_title'] : 'Source' ?>
+		</a></p>
+		<?php endif; ?>
 		
 		<p>
 		<?php foreach ($post['tags'] as $tag) : ?>
