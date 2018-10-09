@@ -32,8 +32,9 @@ $tumblr = new Tumblr\API\Client(
 );
 
 // Make the request
-$response = $tumblr->getBlogPosts('nerdflavor.tumblr.com', array('reblog_info' => true, 'filter' => 'html'));
+//$response = $tumblr->getBlogPosts('nerdflavor.tumblr.com', array('reblog_info' => true, 'filter' => 'html'));
 //$response = $tumblr->getBlogPosts('isthatwhy-everything-is-on-fire.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 0));
+$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 160));
 
 $to_import = array();
 foreach ($response->posts as $post) {
@@ -46,30 +47,56 @@ foreach ($response->posts as $post) {
 		'source_title' => $post->source_title,
 	);
 	
+	$is_reblog = (!empty($post->reblogged_from_url));
 	//This is a reblog, so embed the reblogged post and add the comment
-	if (!empty($post->reblogged_from_url)) {
+	if ($is_reblog) {
 		$rebagel = $post->reblogged_from_url;
 		$embedcode = '';
+		$burntbagel = '';
+		$thisPost['body'] = '';
+		$stepDown = count($post->trail) - 1;
 		
-		try {
-			$embedcode = Embed::create($rebagel)->code;
-			if (empty($embedcode)) {
-				$embedcode = json_decode(file_get_contents('https://www.tumblr.com/oembed/1.0?url='.$rebagel))->html;
+		while ($rebagel && $stepDown >= 0) {
+			try {
+				$embedcode = Embed::create($rebagel)->code;
+				if (empty($embedcode)) {
+					$embedcode = json_decode(file_get_contents('https://www.tumblr.com/oembed/1.0?url='.$rebagel))->html;
+				}
+				$thisPost['body'] = $embedcode;
+			} catch (\Exception $error) {
+				$thisbagel = $post->trail[$stepDown];
+				if ($thisbagel->is_root_item) {
+					// The root post is missing; treat this like an original post
+					$rebagel = false;
+					$is_reblog = false;
+				} else {
+					if (!$thisbagel->is_current_item) {
+						$burntbagel = '<p><a href="'.$rebagel.'">'.$thisbagel->blog->name.'</a>:</p>'.
+													"\n".'<blockquote>'."\n".
+													$thisbagel->content.
+													"\n".'</blockquote>'."\n";
+					}
+					$stepDown -= 1;
+					$thisbagel = $post->trail[$stepDown];
+					$rebagel = 'http://'.$thisbagel->blog->name.'.tumblr.com/post/'.$thisbagel->post->id;
+					              
+				}
 			}
-			$thisPost['body'] = $embedcode;
-		} catch (\Exception $error) {
-			$thisPost['body'] = '<p><a href="'.$rebagel.'">'.$rebagel.'</a></p>';
 		}
 		
+		if ($burntbagel) $thisPost['body'] .= "\n\n".$burntbagel;
 		$thisPost['body'] .= "\n\n".$post->reblog->comment;
-	} else {
+	}
+	
+	if (!$is_reblog) {
 		//This is an original post, so let's figure out the format!
 		if ($post->title) $thisPost['title'] = $post->title;
 		switch($post->type) {
 		  case 'text':
-		  	$thisPost['body'] .= $post->body;
+		  	$thisPost['body'] = $post->body;
 		  	break;
 			case 'link':
+				unset($thisPost['title']);
 				$thisPost['body'] = '<h3>🔗 <a href="'.$post->url.'">'.$post->title.'</a></h3>';
 				$thisPost['body'] .= "\n\n".$post->description;
 				break;
@@ -78,9 +105,8 @@ foreach ($response->posts as $post) {
 					$thisPost['body'] = Embed::create('https://youtu.be/'.$post->video->youtube->video_id)->code;
 				} elseif ($post->video_type == 'tumblr') {
 					$thisPost['body'] = '<video style="width:100%;height:auto;" controls poster="'.$post->thumbnail_url.'" src="'.$post->video_url.'"></video>';
-					// video embed code from $post->video_url
 				} else {
-					$thisPost['body'] = "";
+					$thisPost['body'] = Embed::create($post->permalink_url)->code;
 				}
 				$thisPost['body'] .= "\n\n".$post->caption;
 				break;
@@ -125,7 +151,17 @@ foreach ($response->posts as $post) {
 														'  <p>'.$post->text.'</p>'."\n".
 														'  <footer class="blockquote-footer">'.$post->source.'</footer>'."\n".
 														'</blockquote>';
-				break;														
+				break;
+			case 'audio':
+				if ($post->is_external) {
+					$thisPost['body'] = Embed::create($post->audio_source_url)->code;
+				} elseif ($post->audio_type == 'tumblr') {
+					$thisPost['body'] = '<audio style="width:100%;height:auto;" controls src="'.$post->audio_url.'"></audio>';
+				} else {
+					$thisPost['body'] = "";
+				}
+				$thisPost['body'] .= "\n\n".$post->caption;
+				break;
 		}
 		
 		//$thisPost['body'] = $post->reblog->comment;
