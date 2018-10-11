@@ -31,10 +31,19 @@ $tumblr = new Tumblr\API\Client(
     $eph_config['tumblr_usr_sec']
 );
 
+function try_embed( $url ) {
+	try {
+		return Embed::create($url)->code;
+	} catch (\Exception $error) {
+		return '<p><a href="'.$url.'">'.$url.'</a></p>';
+	}
+}
+
 // Make the request
 //$response = $tumblr->getBlogPosts('nerdflavor.tumblr.com', array('reblog_info' => true, 'filter' => 'html'));
 //$response = $tumblr->getBlogPosts('isthatwhy-everything-is-on-fire.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 0));
-$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 160));
+//$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 160));
+$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 1610));
 
 $to_import = array();
 foreach ($response->posts as $post) {
@@ -42,34 +51,42 @@ foreach ($response->posts as $post) {
 		'pubdate' => $post->date,
 		'tmbid' => $post->id,
 		'tags' => $post->tags,
-		'obj' => $post,
 		'source_url' => $post->source_url,
 		'source_title' => $post->source_title,
+		'obj' => $post,
 	);
 	
 	$is_reblog = (!empty($post->reblogged_from_url));
+	
+	$thisPost['post_type'] = $is_reblog ? 'reblog' : $post->type;
+	
 	//This is a reblog, so embed the reblogged post and add the comment
 	if ($is_reblog) {
 		$rebagel = $post->reblogged_from_url;
 		$embedcode = '';
 		$burntbagel = '';
 		$thisPost['body'] = '';
-		$stepDown = count($post->trail) - 1;
+		$stepDown = -1;
+		if (!empty($post->trail)) $stepDown = count($post->trail) - 1;
 		
-		while ($rebagel && $stepDown >= 0) {
+		while ($rebagel) {
 			try {
 				$embedcode = Embed::create($rebagel)->code;
 				if (empty($embedcode)) {
 					$embedcode = json_decode(file_get_contents('https://www.tumblr.com/oembed/1.0?url='.$rebagel))->html;
 				}
+				if (empty($embedcode)) {
+					throw new Exception('Still blank!');
+				}
 				$thisPost['body'] = $embedcode;
+				$rebagel = false;
 			} catch (\Exception $error) {
-				$thisbagel = $post->trail[$stepDown];
-				if ($thisbagel->is_root_item) {
+				if ($stepDown < 0 || $post->trail[$stepDown]->is_root_item) {
 					// The root post is missing; treat this like an original post
 					$rebagel = false;
 					$is_reblog = false;
 				} else {
+					$thisbagel = $post->trail[$stepDown];
 					if (!$thisbagel->is_current_item) {
 						$burntbagel = '<p><a href="'.$rebagel.'">'.$thisbagel->blog->name.'</a>:</p>'.
 													"\n".'<blockquote>'."\n".
@@ -102,11 +119,11 @@ foreach ($response->posts as $post) {
 				break;
 			case 'video':
 				if ($post->video_type == 'youtube') {
-					$thisPost['body'] = Embed::create('https://youtu.be/'.$post->video->youtube->video_id)->code;
+					$thisPost['body'] = try_embed('https://youtu.be/'.$post->video->youtube->video_id);
 				} elseif ($post->video_type == 'tumblr') {
 					$thisPost['body'] = '<video style="width:100%;height:auto;" controls poster="'.$post->thumbnail_url.'" src="'.$post->video_url.'"></video>';
 				} else {
-					$thisPost['body'] = Embed::create($post->permalink_url)->code;
+					$thisPost['body'] = try_embed($post->permalink_url);
 				}
 				$thisPost['body'] .= "\n\n".$post->caption;
 				break;
@@ -154,13 +171,21 @@ foreach ($response->posts as $post) {
 				break;
 			case 'audio':
 				if ($post->is_external) {
-					$thisPost['body'] = Embed::create($post->audio_source_url)->code;
+					$thisPost['body'] = try_embed($post->audio_source_url);
 				} elseif ($post->audio_type == 'tumblr') {
 					$thisPost['body'] = '<audio style="width:100%;height:auto;" controls src="'.$post->audio_url.'"></audio>';
 				} else {
 					$thisPost['body'] = "";
 				}
 				$thisPost['body'] .= "\n\n".$post->caption;
+				break;
+			case 'answer':
+				if (!empty($post->asking_url))
+					$thisPost['body'] = '<p><a href="'.$post->asking_url.'">'.$post->asking_name.'</a> asked:</p>';
+				else $thisPost['body'] = '<p>An anonymous visitor asked:</p>';
+				
+				$thisPost['body'] .= "\n".'<blockquote>'.$post->question.'</blockquote>'."\n\n".
+				                     $post->answer;
 				break;
 		}
 		
@@ -195,7 +220,7 @@ foreach ($to_import as $post) :
 		</a></p>
 		<?php endif; ?>
 		
-		<p>
+		<p><a href="#" class="badge badge-info"><?php echo $post['post_type']; ?></a>
 		<?php foreach ($post['tags'] as $tag) : ?>
 			<a href="#" class="badge badge-secondary">#<?php echo $tag; ?></a>
 		<?php endforeach; ?>
