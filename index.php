@@ -43,7 +43,7 @@ function try_embed( $url ) {
 //$response = $tumblr->getBlogPosts('nerdflavor.tumblr.com', array('reblog_info' => true, 'filter' => 'html'));
 //$response = $tumblr->getBlogPosts('isthatwhy-everything-is-on-fire.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 0));
 //$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 160));
-$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 1610));
+$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 1500));
 
 $to_import = array();
 foreach ($response->posts as $post) {
@@ -51,10 +51,11 @@ foreach ($response->posts as $post) {
 		'pubdate' => $post->date,
 		'tmbid' => $post->id,
 		'tags' => $post->tags,
-		'source_url' => $post->source_url,
-		'source_title' => $post->source_title,
 		'obj' => $post,
 	);
+	
+	if (isset($post->source_url)) $thisPost['source_url'] = $post->source_url;
+	if (isset($post->source_title)) $thisPost['source_url'] = $post->source_title;
 	
 	$is_reblog = (!empty($post->reblogged_from_url));
 	
@@ -81,7 +82,7 @@ foreach ($response->posts as $post) {
 				$thisPost['body'] = $embedcode;
 				$rebagel = false;
 			} catch (\Exception $error) {
-				if ($stepDown < 0 || $post->trail[$stepDown]->is_root_item) {
+				if ($stepDown < 0 || (isset($post->trail[$stepDown]->is_root_item) && $post->trail[$stepDown]->is_root_item)) {
 					// The root post is missing; treat this like an original post
 					$rebagel = false;
 					$is_reblog = false;
@@ -94,9 +95,17 @@ foreach ($response->posts as $post) {
 													"\n".'</blockquote>'."\n";
 					}
 					$stepDown -= 1;
-					$thisbagel = $post->trail[$stepDown];
-					$rebagel = 'http://'.$thisbagel->blog->name.'.tumblr.com/post/'.$thisbagel->post->id;
-					              
+					if ($stepDown >= 0) {
+						$thisbagel = $post->trail[$stepDown];
+						$rebagel = 'http://'.$thisbagel->blog->name.'.tumblr.com/post/'.$thisbagel->post->id;
+					} else {
+					  if ($post->reblogged_from_url == $post->reblogged_root_url) {
+							$rebagel = false;
+							$is_reblog = false;
+					  } else {
+					  	$rebagel = $post->reblogged_root_url;
+					  }
+					}         
 				}
 			}
 		}
@@ -107,7 +116,7 @@ foreach ($response->posts as $post) {
 	
 	if (!$is_reblog) {
 		//This is an original post, so let's figure out the format!
-		if ($post->title) $thisPost['title'] = $post->title;
+		if (isset($post->title)) $thisPost['title'] = $post->title;
 		switch($post->type) {
 		  case 'text':
 		  	$thisPost['body'] = $post->body;
@@ -119,7 +128,11 @@ foreach ($response->posts as $post) {
 				break;
 			case 'video':
 				if ($post->video_type == 'youtube') {
-					$thisPost['body'] = try_embed('https://youtu.be/'.$post->video->youtube->video_id);
+					if (isset($post->video) && isset($post->video->youtube)) {
+						$thisPost['body'] = try_embed('https://youtu.be/'.$post->video->youtube->video_id);
+					} else {
+						$thisPost['body'] = '<p class="text-muted">Video removed or otherwise unavailable.</p>';
+					}
 				} elseif ($post->video_type == 'tumblr') {
 					$thisPost['body'] = '<video style="width:100%;height:auto;" controls poster="'.$post->thumbnail_url.'" src="'.$post->video_url.'"></video>';
 				} else {
@@ -148,9 +161,9 @@ foreach ($response->posts as $post) {
 					}
 				} else {
 					$thisPost['body'] = '<p>';
-					if ($post->link_url) $thisPost['body'] .= '<a href="'.$post->link_url.'">';
+					if (isset($post->link_url)) $thisPost['body'] .= '<a href="'.$post->link_url.'">';
 					$thisPost['body'] .= '<img class="img-fluid" alt="Image from tumblr" src="'.$post->photos[0]->original_size->url.'">';
-					if ($post->link_url) $thisPost['body'] .= '</a>';
+					if (isset($post->link_url)) $thisPost['body'] .= '</a>';
 					$thisPost['body'] .= '</p>';
 				}
 				$thisPost['body'] .= "\n\n".$post->caption;
@@ -170,7 +183,7 @@ foreach ($response->posts as $post) {
 														'</blockquote>';
 				break;
 			case 'audio':
-				if ($post->is_external) {
+				if (isset($post->is_external) && $post->is_external) {
 					$thisPost['body'] = try_embed($post->audio_source_url);
 				} elseif ($post->audio_type == 'tumblr') {
 					$thisPost['body'] = '<audio style="width:100%;height:auto;" controls src="'.$post->audio_url.'"></audio>';
@@ -188,21 +201,10 @@ foreach ($response->posts as $post) {
 				                     $post->answer;
 				break;
 		}
-		
-		//$thisPost['body'] = $post->reblog->comment;
 	}
 	
 	$to_import[] = $thisPost;
 }
-
-//$info = Embed::create('https://twitter.com/statuses/937871668554358784');
-//echo $info->code;
-
-/*
-echo '<!--';
-print_r($response);
-echo '-->';
-*/
 
 foreach ($to_import as $post) :
 
@@ -210,13 +212,13 @@ foreach ($to_import as $post) :
 
 <div class="row justify-content-md-center">
 	<div class="col-md-6">
-		<?php if ($post['title']) echo '<h2>'.$post['title'].'</h2>'; ?>
+		<?php if (isset($post['title'])) echo '<h2>'.$post['title'].'</h2>'; ?>
 		
 		<?php echo $post['body']; ?>
 		
-		<?php if ($post['source_url']) : ?>
+		<?php if (isset($post['source_url'])) : ?>
 		<p><a class="badge badge-primary" href="<?php echo $post['source_url']; ?>">
-			<?php echo $post['source_title'] ? 'Source: '.$post['source_title'] : 'Source' ?>
+			<?php echo isset($post['source_title']) ? 'Source: '.$post['source_title'] : 'Source' ?>
 		</a></p>
 		<?php endif; ?>
 		
@@ -228,9 +230,10 @@ foreach ($to_import as $post) :
 	</div>
 </div>
 
-<!--
-<?php print_r($post['obj']); ?>
--->
+<pre>
+<?php //print_r($post['obj']); ?>
+</pre>
+
 <hr>
 
 <?php endforeach; ?>
