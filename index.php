@@ -33,7 +33,9 @@ $tumblr = new Tumblr\API\Client(
 
 function try_embed( $url ) {
 	try {
-		return Embed::create($url)->code;
+		$code = Embed::create($url)->code;
+		if (empty($code)) $code = '<p><a href="'.$url.'">'.$url.'</a></p>';
+		return $code;
 	} catch (\Exception $error) {
 		return '<p><a href="'.$url.'">'.$url.'</a></p>';
 	}
@@ -43,7 +45,7 @@ function try_embed( $url ) {
 //$response = $tumblr->getBlogPosts('nerdflavor.tumblr.com', array('reblog_info' => true, 'filter' => 'html'));
 //$response = $tumblr->getBlogPosts('isthatwhy-everything-is-on-fire.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 0));
 //$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 160));
-$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 1500));
+$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 700));
 
 $to_import = array();
 foreach ($response->posts as $post) {
@@ -55,7 +57,7 @@ foreach ($response->posts as $post) {
 	);
 	
 	if (isset($post->source_url)) $thisPost['source_url'] = $post->source_url;
-	if (isset($post->source_title)) $thisPost['source_url'] = $post->source_title;
+	if (isset($post->source_title)) $thisPost['source_title'] = $post->source_title;
 	
 	$is_reblog = (!empty($post->reblogged_from_url));
 	
@@ -84,8 +86,12 @@ foreach ($response->posts as $post) {
 			} catch (\Exception $error) {
 				if ($stepDown < 0 || (isset($post->trail[$stepDown]->is_root_item) && $post->trail[$stepDown]->is_root_item)) {
 					// The root post is missing; treat this like an original post
-					$rebagel = false;
-					$is_reblog = false;
+					if ($rebagel == $post->reblogged_root_url || $post->reblogged_from_url == $post->reblogged_root_url) {
+						$rebagel = false;
+						$is_reblog = false;
+					} else {
+						$rebagel = $post->reblogged_root_url;
+					}
 				} else {
 					$thisbagel = $post->trail[$stepDown];
 					if (!$thisbagel->is_current_item) {
@@ -135,7 +141,10 @@ foreach ($response->posts as $post) {
 					}
 				} elseif ($post->video_type == 'tumblr') {
 					$thisPost['body'] = '<video style="width:100%;height:auto;" controls poster="'.$post->thumbnail_url.'" src="'.$post->video_url.'"></video>';
-				} else {
+				} elseif ($post->video_type == 'vine') {
+					//because Vine apparently didn't support OEmbed?!
+					$thisPost['body'] = $post->player[count($post->player) - 1]->embed_code;
+				}else {
 					$thisPost['body'] = try_embed($post->permalink_url);
 				}
 				$thisPost['body'] .= "\n\n".$post->caption;
