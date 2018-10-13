@@ -26,14 +26,15 @@ function try_embed( $url ) {
 $response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html'));
 
 chdir($eph_config['hugo_base_dir']);
-exec("git pull origin");
+//exec("git pull origin");
 
 echo 'Processing...';
 
 foreach ($response->posts as $post) {
 
-  $postDate =  date_create_from_format('Y-m-d H:i:s O', $post->date);
-  $postdir = $eph_config['hugo_base_dir'].'content/status/'.$postDate->format('Y/m').'/'.$post->id;
+  //$postDate = date_create_from_format('Y-m-d H:i:s O', $post->date);
+  $postDate = date_create($post->date);
+  $postdir = $eph_config['hugo_base_dir'].'content/post/'.$postDate->format('Y/m').'/'.$post->id;
 	
 	if (!is_dir($postdir)) {
 		//Make the status, year, and month directories if needed
@@ -301,11 +302,13 @@ foreach ($response->posts as $post) {
 		$fileout = fopen($postdir.'/index.html', 'w');
 		fwrite($fileout, json_encode($frontmatter)."\n\n".$body);
 		fclose($fileout);
+	} else {
+		echo 'Directory '.$postDir.' already exists; skipping import.'."\n";
 	}
 }
 
-exec("git add .");  
-exec("git commit -m 'Update from Audubon-tumblr'");
+//exec("git add .");  
+//exec("git commit -m 'Update from Audubon-tumblr'");
 //exec("git push origin master");
 
 echo 'done!';
