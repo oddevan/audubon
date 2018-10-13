@@ -42,15 +42,15 @@ function try_embed( $url ) {
 }
 
 // Make the request
-//$response = $tumblr->getBlogPosts('nerdflavor.tumblr.com', array('reblog_info' => true, 'filter' => 'html'));
+$response = $tumblr->getBlogPosts('plotholefragments.tumblr.com', array('reblog_info' => true, 'filter' => 'html'));
 //$response = $tumblr->getBlogPosts('isthatwhy-everything-is-on-fire.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 0));
 //$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 160));
-$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 700));
+//$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 700));
 
 $to_import = array();
 foreach ($response->posts as $post) {
 	$thisPost = array(
-		'pubdate' => $post->date,
+		'pubdate' => date_create_from_format('Y-m-d H:i:s O', $post->date),
 		'tmbid' => $post->id,
 		'tags' => $post->tags,
 		'obj' => $post,
@@ -236,6 +236,8 @@ foreach ($to_import as $post) :
 			<a href="#" class="badge badge-secondary">#<?php echo $tag; ?></a>
 		<?php endforeach; ?>
 		</p>
+		
+		<p class="text-secondary"><code><?php echo $post['tmbid']; ?></code> on <?php echo date_format($post['pubdate'], 'F j, Y, g:i A'); ?></p>
 	</div>
 </div>
 

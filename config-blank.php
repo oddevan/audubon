@@ -4,14 +4,15 @@ $eph_config = array(
 	'twitter_key'			=> '',
 	'twitter_secret'  => '',
 	
-	//TODO: replace with user-specific values in the DB
 	'twitter_usr_key' => '',
 	'twitter_usr_sec' => '',
 	
-	'mysql_server'    => '',
-	'mysql_database'  => '',
-	'mysql_user'			=> '',
-	'mysql_password'  => '',
+	'tumblr_key'      => '',
+	'tumblr_secret'   => '',
 	
-	'hugo_base_dir'   => '/path/to/hugo/site/'
+	'tumblr_usr_key'  => '',
+	'tumblr_usr_sec'  => '',
+	
+	'jekyll_base_dir' => '/path/to/jekyll/site/',
+	'hugo_base_dir'   => '/path/to/hugo/site/',
 );
