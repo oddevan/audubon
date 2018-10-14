@@ -23,7 +23,7 @@ function try_embed( $url ) {
 	}
 }
 
-$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html'));
+$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 0));
 
 chdir($eph_config['hugo_base_dir']);
 //exec("git pull origin");
@@ -49,7 +49,7 @@ foreach ($response->posts as $post) {
 		mkdir($postdir);
 		
 		$frontmatter = array(
-			'date' => $post->date,
+			'date' => $postDate->format('c'), //Tue Jan 02 00:13:58 +0000 2018
 			'slug' => $post->id,
 			'tumblr_id' => $post->id,
 			'tags' => array() + $post->tags,
@@ -124,13 +124,13 @@ foreach ($response->posts as $post) {
 	
 		if (!$is_reblog) {
 			//This is an original post, so let's figure out the format!
-			if (isset($post->title)) $thisPost['title'] = $post->title;
+			if (isset($post->title)) $frontmatter['title'] = $post->title;
 			switch($post->type) {
 				case 'text':
 					$body = $post->body;
 					break;
 				case 'link':
-					unset($thisPost['title']);
+					unset($frontmatter['title']);
 					$body = '<h3>🔗 <a href="'.$post->url.'">'.$post->title.'</a></h3>';
 					$body .= "\n\n".$post->description;
 					break;
@@ -303,7 +303,7 @@ foreach ($response->posts as $post) {
 		fwrite($fileout, json_encode($frontmatter)."\n\n".$body);
 		fclose($fileout);
 	} else {
-		echo 'Directory '.$postDir.' already exists; skipping import.'."\n";
+		echo 'Directory '.$postdir.' already exists; skipping import.'."\n";
 	}
 }
 
