@@ -23,7 +23,20 @@ function try_embed( $url ) {
 	}
 }
 
-$response = $tumblr->getBlogPosts('paperairplanemob.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 0));
+function download_resource( $url, $postdir, &$frontmatter, $alt = false, $name = false ) {
+	$filename = substr(strrchr($url, "/"), 1);
+	file_put_contents($postdir.'/'.$filename, file_get_contents($url));
+	
+	if (!$name) $name = substr(strchr($url, "."), 1);
+	if (!$alt) $alt = 'Image from tumblr';
+	
+	$frontmatter['resources'][] = array('src' => $filename, 'name' => $name.'', 'alt' => $alt);
+	
+	return '{{< eph_resource "'.$name.'" >}}';
+}
+
+//$response = $tumblr->getBlogPosts('isthatwhy-everything-is-on-fire.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 0));
+$response = $tumblr->getBlogPosts('nerdflavor.tumblr.com', array('reblog_info' => true, 'filter' => 'html', 'offset' => 0));
 
 chdir($eph_config['hugo_base_dir']);
 //exec("git pull origin");
@@ -142,7 +155,7 @@ foreach ($response->posts as $post) {
 							$body = '<p class="text-muted">Video removed or otherwise unavailable.</p>';
 						}
 					} elseif ($post->video_type == 'tumblr') {
-						$body = '<video style="width:100%;height:auto;" controls poster="'.$post->thumbnail_url.'" src="'.$post->video_url.'"></video>';
+						$body = download_resource($post->video_url, $postdir, $frontmatter);
 					} elseif ($post->video_type == 'vine') {
 						//because Vine apparently didn't support OEmbed?!
 						$body = $post->player[count($post->player) - 1]->embed_code;
@@ -163,8 +176,11 @@ foreach ($response->posts as $post) {
 							while ($numLeftInRow > 0) {
 								$currentPhoto = $post->photos[$photoInd];
 								$body .= '<div class="col-sm">'."\n".
-																		 '  <img class="img-fluid" alt="'.$currentPhoto->caption.'" src="'.$currentPhoto->original_size->url.'">'."\n".
-																		 '</div>'."\n";
+								         download_resource($currentPhoto->original_size->url, 
+								         								   $postdir, 
+								         								   $frontmatter, 
+								         								   $currentPhoto->caption ).
+												 '</div>'."\n";
 								$photoInd += 1;
 								$numLeftInRow -= 1;
 							}
@@ -174,7 +190,7 @@ foreach ($response->posts as $post) {
 					} else {
 						$body = '<p>';
 						if (isset($post->link_url)) $body .= '<a href="'.$post->link_url.'">';
-						$body .= '<img class="img-fluid" alt="Image from tumblr" src="'.$post->photos[0]->original_size->url.'">';
+						$body .= download_resource($post->photos[0]->original_size->url, $postdir, $frontmatter);
 						if (isset($post->link_url)) $body .= '</a>';
 						$body .= '</p>';
 					}
@@ -184,21 +200,22 @@ foreach ($response->posts as $post) {
 					$body = '<dl class="row">'."\n";
 					foreach ($post->dialogue as $dline) {
 						$body .= '  <dt class="col-sm-3">'.$dline->label.'</dt>'."\n".
-																 '  <dd class="col-sm-9">'.$dline->phrase.'</dd>'."\n";
+										 '  <dd class="col-sm-9">'.$dline->phrase.'</dd>'."\n";
 					}
 					$body .= '</dl>';
 					break;
 				case 'quote':
 					$body = '<blockquote class="blockquote">'."\n".
-															'  <p>'.$post->text.'</p>'."\n".
-															'  <footer class="blockquote-footer">'.$post->source.'</footer>'."\n".
-															'</blockquote>';
+									'  <p>'.$post->text.'</p>'."\n".
+									'  <footer class="blockquote-footer">'.$post->source.'</footer>'."\n".
+									'</blockquote>';
 					break;
 				case 'audio':
 					if (isset($post->is_external) && $post->is_external) {
 						$body = try_embed($post->audio_source_url);
 					} elseif ($post->audio_type == 'tumblr') {
-						$body = '<audio style="width:100%;height:auto;" controls src="'.$post->audio_url.'"></audio>';
+						//TODO: need to add a .mp3 or appropriate file extension here!
+						$body = download_resource($post->audio_url, $postdir, $frontmatter);
 					} else {
 						$body = "";
 					}
@@ -209,95 +226,10 @@ foreach ($response->posts as $post) {
 						$body = '<p><a href="'.$post->asking_url.'">'.$post->asking_name.'</a> asked:</p>';
 					else $body = '<p>An anonymous visitor asked:</p>';
 				
-					$body .= "\n".'<blockquote>'.$post->question.'</blockquote>'."\n\n".
-															 $post->answer;
+					$body .= "\n".'<blockquote>'.$post->question.'</blockquote>'."\n\n".$post->answer;
 					break;
 			}
 		}
-		/*
-		$body = mb_substr($tweet->full_text, $tweet->display_text_range[0], ($tweet->display_text_range[1] - $tweet->display_text_range[0]));
-
-		if (!empty($tweet->retweeted_status)) {
-			unset($body);
-			$body = getTweetEmbed($tweet->retweeted_status->id);
-		} else {
-			if ($tweet->in_reply_to_status_id && $tweet->in_reply_to_user_id != $tweet->user->id) {
-				$body = getTweetEmbed($tweet->in_reply_to_status_id)."\n\n".$body;
-			} elseif ($tweet->is_quote_status) {
-				$body = getTweetEmbed($tweet->quoted_status_id)."\n\n".$body;
-			} else {
-				$frontmatter['categories'][] = 'micropost';
-			}
-	
-			foreach ($tweet->entities->urls as $tacolink) {
-				if ($tweet->is_quote_status) {
-					$ind = strrpos($tacolink->expanded_url, '/');
-					if (substr($tacolink->expanded_url, $ind + 1) == $tweet->quoted_status_id) {
-						$body = str_replace($tacolink->url,	'',	$body);
-					}
-				}
-		
-				$body = str_replace(
-					$tacolink->url,
-					'['.$tacolink->display_url.']('.$tacolink->expanded_url.')',
-					$body
-				);
-			}
-		
-			$alreadyMentioned = array();
-			foreach ($tweet->entities->user_mentions as $atmention) {
-				if (!in_array($atmention->screen_name, $alreadyMentioned)) {
-					$body = str_replace(
-						'@'.$atmention->screen_name,
-						'[@'.$atmention->screen_name.'](https://twitter.com/'.$atmention->screen_name.')',
-						$body
-					);
-					$alreadyMentioned[] = $atmention->screen_name;
-				}
-			}
-		
-			if (!empty($tweet->entities->hashtags)) {
-				foreach ($tweet->entities->hashtags as $hashtag) {
-					$body = str_replace(
-						'#'.$hashtag->text,
-						'[#'.$hashtag->text.'](https://twitter.com/hashtag/'.$hashtag->text.')',
-						$body
-					);
-					$frontmatter['tags'][] = $hashtag->text;
-				}
-			}
-		
-			if (!empty($tweet->extended_entities->media)) {
-				foreach ($tweet->extended_entities->media as $media) {
-					if ($media->type == 'photo') {
-						$filename = substr(strrchr($media->media_url_https, "/"), 1);
-						file_put_contents($postdir.'/'.$filename, file_get_contents($media->media_url_https));
-						$frontmatter['resources'][] = array('src' => $filename, 'name' => $media->id.'');
-						
-						$body .= "\n\n".'{{< eph_resource "'.$media->id.'" >}}';
-					} elseif ($media->type == 'video' || $media->type == 'animated_gif') {
-						$videoURL = '#';
-						$videoBitrate = -1;
-						foreach ($media->video_info->variants as $vidinfo) {
-							if ($vidinfo->content_type == 'video/mp4' && $vidinfo->bitrate > $videoBitrate) {
-								$videoBitrate = $vidinfo->bitrate;
-								$videoURL = $vidinfo->url;
-							}
-						}
-						
-						$filename = substr(strrchr($videoURL, "/"), 1);
-						file_put_contents($postdir.'/'.$filename, file_get_contents($videoURL));
-						$frontmatter['resources'][] = array(
-							'src' => $filename,
-							'name' => $media->id.'',
-							'params' => array('gif' => ($media->type == 'animated_gif'))
-						);
-						
-						$body .= "\n\n".'{{< eph_resource "'.$media->id.'" >}}';
-					}
-				}
-			}
-		}*/
 	
 		$fileout = fopen($postdir.'/index.html', 'w');
 		fwrite($fileout, json_encode($frontmatter)."\n\n".$body);
